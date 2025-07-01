@@ -80,3 +80,9 @@ select * from Issue_Status;
 
 COPY Return_Status (return_id, issued_id, return_date) FROM '/tmp/return_status.csv' DELIMITER ',' CSV HEADER;
 select * from Return_Status;
+
+
+-- Modified Some Content
+alter table Issue_status add column book_quality varchar(15) default('Good');
+
+update Issue_status set book_quality='Damaged' where issue_id in ('IS106', 'IS110', 'IS113');

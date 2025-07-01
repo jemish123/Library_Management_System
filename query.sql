@@ -90,9 +90,36 @@ select * from Books_Rental_Threshold;
 -- 12. Retrieve the list of books not yet returned
 select * from return_status;
 select 
-	*
+	distinct issued_book_name
 from 
-	issue_status as i join return_status as r
+	issue_status as i left join return_status as r
 	on i.issue_id=r.issued_id
 	where r.return_id IS NULL;
+
+
+
+-- --------------------------------	 Advanced SQL Queries  ---------------------------------
+/*
+13. 	Identify Members with Overdue Books
+ 		Write a query to identify members who have overdue books (assume a 30-day period). Display the member's id, 
+		member's name, book title, issue_date and days overdue.
+*/
+
+-- 	issued_status == members == books == return_status
+-- 	filters books which are returned.
+--	overdue > 30 days
+
+select 
+	i.issued_member_id as Member_Id,
+	m.member_name as Member_Name,
+	b.book_title as Book_Title,
+	i.issued_date as Issue_Date,
+	(CURRENT_DATE - i.issued_date) as Days_Overdue
+from 
+	issue_status as i join members as m on m.member_id=i.issued_member_id
+	join books as b on b.isbn=i.issued_book_isbn
+	left join return_status as r on r.issued_id=i.issue_id
+	where r.return_date IS NULL and (CURRENT_DATE - i.issued_date)>30
+	order by Member_id;
 	
+--	
