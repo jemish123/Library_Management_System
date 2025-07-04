@@ -121,5 +121,63 @@ from
 	left join return_status as r on r.issued_id=i.issue_id
 	where r.return_date IS NULL and (CURRENT_DATE - i.issued_date)>30
 	order by Member_id;
+
+
+/*
+14.	Update Book status on return
+	Write a query to update the status of the book in the Books table to "Yes" when they are returned (based on entries in the return_status table.)
+*/
+-- Stored Procedure
+create or replace procedure add_return_record(p_return_id VARCHAR(10), p_issued_id VARCHAR(10), p_book_quality VARCHAR(15))
+	language plpgsql
+as $$
+	declare 
+		v_isbn VARCHAR(50);
+		v_title VARCHAR(80);
 	
---	
+	begin
+		SELECT issued_book_isbn, issued_book_name INTO v_isbn, v_title
+			FROM issue_status where issue_id=p_issued_id;
+		
+		insert into Return_Status (return_id, issued_id, return_book_name, return_date, return_book_isbn, book_quality)
+			VALUES
+		(p_return_id, p_issued_id, v_title, CURRENT_DATE, v_isbn, p_book_quality);
+
+		UPDATE books set status='Yes' 
+			where isbn=v_isbn; 
+
+		raise notice 'Thank you for returning the book:  %', v_title;
+	end;
+	$$;
+
+call add_return_record('RS119', 'IS122', 'Good');
+
+
+/*
+15.	Branch Performance Report
+	Create a query that generates a performance report for each branch, showing the number of books issued, the number of books returned,
+	and the total revenue generated from book rentals.
+*/
+select * from branch;
+select * from issue_status;
+select * from employee;
+select * from return_status;
+select * from books;
+
+CREATE TABLE branch_performance_report 
+	as (
+		SELECT 
+			b.branch_id as "Branch", 
+			b.manager_id as "Manager ID", 
+			COUNT(i.issue_id) as "Total Issued", 
+			COUNT(r.return_id) as "Total Returned", 
+			SUM(bo.rental_price) as "Total Revenue"
+		from issue_status as i join employee as e on i.issued_emp_id=e.emp_id
+				join branch as b on b.branch_id = e.branch_id 
+				left join return_status as r on r.issued_id=i.issue_id 
+				join books as bo on bo.isbn=i.issued_book_isbn
+			GROUP BY b.branch_id, b.manager_id
+			ORDER BY b.branch_id, b.manager_id
+	);
+
+select * from branch_performance_report;
