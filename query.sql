@@ -181,3 +181,135 @@ CREATE TABLE branch_performance_report
 	);
 
 select * from branch_performance_report;
+
+
+/*
+16.	Create a Table of Active Members
+	Use CTAS (Create table as (Select----)) statement to create a new table "active_members" containing members who have issued at least 
+	one book in last 6 months.
+*/
+CREATE TABLE active_members 
+	AS (
+		SELECT 
+			m.*,
+			i.issued_date as last_issued_date 
+		FROM 
+			members as m join issue_status as i
+			on i.issued_member_id = m.member_id
+		WHERE
+			i.issued_date >= CURRENT_DATE - INTERVAL '6 months'
+	);
+SELECT * FROM active_members;
+
+
+
+/*
+17.	Find Employees with the most book issues processed
+	Write a query to find the top 3 employees who have the most books issues. Display the employee name, number of books processed 
+	and their branch.
+*/
+SELECT 
+	e.emp_id as emp_id,
+	e.emp_name as emp_name,
+	b.branch_id as branch_id,
+	COUNT(i.issue_id) as total_issues
+FROM 
+	employee as e join issue_status as i ON i.issued_emp_id = e.emp_id
+	join branch as b ON b.branch_id = e.branch_id
+	GROUP BY e.emp_id,e.emp_name,b.branch_id
+	ORDER BY total_issues DESC
+	LIMIT 3;
+
+
+/*
+18.	Identify Members issuing High-Risk Books
+	Write a query to identify members who have issued books more than twice with status "damaged" in the books table.
+	Display the member name, book title and number of times they've issued damaged books. 
+*/
+-- This query identifies members who have issued damaged books more than twice.
+SELECT 
+	m.member_name as Members_Issued_Damage_Books
+FROM members as m join 
+	(SELECT 
+		i.issued_member_id, COUNT(i.issue_id) as damaged_issue_count
+	FROM 
+		books as b right join issue_status as i
+		ON i.issued_book_isbn = b.isbn
+		where b.book_quality='Damaged'
+		GROUP BY i.issued_member_id) as di
+	ON m.member_id=di.issued_member_id
+	WHERE damaged_issue_count > 2;
+
+-- This query identifies members, book title and number of times they have issued damaged books.
+SELECT 
+	m.member_name as member_name,
+	b.book_title as book_title,
+	COUNT(i.issue_id) as damaged_book_issue_count
+FROM 
+	books as b join issue_status as i on i.issued_book_isbn = b.isbn
+	join members as m on m.member_id = i.issued_member_id
+	WHERE b.book_quality='Damaged'
+	GROUP BY m.member_name,b.book_title;
+
+
+/*
+19.	Stored Procedure objective: Create a stored procedure to manage the status of books in LMS.
+	Description: 
+		Write a stored procedure which update the status of the book on its issuance. The procedure should functions as follows:
+		1.	The stored procedure should take the book_id as an input parameter.
+		2.	The procedure should look for whether the book is available or not. (i.e., status='Yes').
+		3.	If the book is available, it should be issued, and the status in the books table should be updated to 'No'. 
+		4.	If the book is not available (status = 'No'), the procedure should return an error message indicating that the book is 
+			currently not available.
+*/
+CREATE OR REPLACE PROCEDURE 
+	issue_book(
+		p_issue_id VARCHAR(10), 
+		p_issued_member_id VARCHAR(30), 
+		p_issued_book_isbn VARCHAR(50), 
+		p_issued_emp_id VARCHAR(10)
+) LANGUAGE plpgsql 
+AS $$
+	-- declare all variables
+	DECLARE
+	is_available VARCHAR(50);
+	requested_book_name VARCHAR(100);
+	
+	-- starts the process of book issuance
+	BEGIN
+		-- Check whether the book is available or not
+		SELECT status, book_title into is_available, requested_book_name
+		FROM books where isbn=p_issued_book_isbn;
+
+		IF is_available = 'yes' 
+			THEN
+				INSERT INTO issue_status (issue_id, issued_member_id, issued_book_name, issued_date, issued_book_isbn, issued_emp_id)
+					VALUES (p_issue_id, p_issued_member_id, requested_book_name, CURRENT_DATE, p_issued_book_isbn, p_issued_emp_id);
+				
+				-- Raise a notice that book is issued.
+				RAISE NOTICE 'Books isbn %s has been issued to %s.', p_issued_book_isbn, p_issued_member_id;
+
+				-- Update the status to 'No' for the issued_book.
+				UPDATE books SET status='no' WHERE isbn=p_issued_book_isbn;
+		ELSE
+			RAISE NOTICE 'Sorry for the inconvinience. Book isbn %s is not available at this time.', p_issued_book_isbn;
+		END IF;
+	END;
+$$
+
+CALL issue_book('IS41', 'C110', '978-0-7432-4722-4', 'E105');
+
+
+
+/*
+20.	Create Table As Select (CTAS) Objective: Create a CTAS (Create Table As Select) query to identify overdue books and calculate fines.
+
+	Description: Write a CTAS query to create a new table that lists each member and the books they have issued but not returned within 30 days. 
+	The table should include: The number of overdue books. The total fines, with each day's fine calculated at $0.50. 
+	The number of books issued by each member. The resulting table should show: Member ID Number of overdue books Total fines.
+*/
+SELECT 
+	*
+FROM
+	issue_status as i LEFT JOIN return_status as r
+	ON i.issue_id!=r.issued_id AND i.issued_book_isbn=r.return_book_isbn;
