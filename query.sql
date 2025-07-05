@@ -308,8 +308,19 @@ CALL issue_book('IS41', 'C110', '978-0-7432-4722-4', 'E105');
 	The table should include: The number of overdue books. The total fines, with each day's fine calculated at $0.50. 
 	The number of books issued by each member. The resulting table should show: Member ID Number of overdue books Total fines.
 */
-SELECT 
-	*
-FROM
-	issue_status as i LEFT JOIN return_status as r
-	ON i.issue_id!=r.issued_id AND i.issued_book_isbn=r.return_book_isbn;
+CREATE TABLE overdue_calculations 
+AS (SELECT 
+		m.member_id as member_id,
+		m.member_name as member_name,
+		COUNT(i.issued_book_isbn) as Overdue_Books,
+		SUM((CURRENT_DATE - (i.issued_date + INTERVAL '30 Days')::DATE)* 0.5) as Total_Fines
+	FROM
+		members as m join issue_status as i ON i.issued_member_id = m.member_id
+		LEFT JOIN return_status as r ON i.issue_id=r.issued_id
+		JOIN books as b ON b.isbn = i.issued_book_isbn
+	WHERE 
+		r.return_date IS NULl AND CURRENT_DATE - (i.issued_date + INTERVAL '30 Days')::DATE > 0
+	GROUP BY
+		m.member_id, m.member_name
+);
+SELECT * FROM overdue_calculations;
